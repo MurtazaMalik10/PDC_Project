@@ -1,0 +1,99 @@
+﻿@page "/test-api"
+@using Microsoft.AspNetCore.SignalR.Client;
+
+<h3>API Test</h3>
+<button @onclick="CallApi">Test API</button>
+
+<p>@apiResponse</p>
+
+<h3>Vote Submission</h3>
+
+<p>Please select an option to vote:</p>
+
+<!-- Dropdown for vote options -->
+<select @bind="selectedVote">
+    <option value="">Select a party</option>
+    <option value="PTI">PTI</option>
+    <option value="PPP">PPP</option>
+    <option value="PMLN">PMLN</option>
+    <option value="PMLQ">PMLQ</option>
+</select>
+
+<!-- Submit button for sending vote -->
+<button @onclick="SubmitVote">Submit Vote</button>
+
+<h3>Real-time Vote Counts</h3>
+<p>Votes:</p>
+<ul>
+    @foreach (var vote in votes)
+    {
+        <li>@vote</li>
+    }
+</ul>
+
+<p>@voteResponse</p>
+
+@code {
+    private string apiResponse;
+    private string voteResponse;
+    private string selectedVote;
+    private List<string> votes = new List<string>(); // Store votes in real-time
+
+    private HubConnection? hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Initialize SignalR connection
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl("https://localhost:7142/votingHub")
+            .Build();
+
+        // Register for the event when a new vote is submitted
+        hubConnection.On<string>("ReceiveVoteUpdate", (vote) =>
+        {
+            // Add the received vote to the list (real-time display)
+            votes.Add(vote);
+            StateHasChanged(); // Trigger a re-render
+        });
+
+        // Start the connection
+        await hubConnection.StartAsync();
+    }
+
+    // Call the API to test
+    private async Task CallApi()
+    {
+        try
+        {
+            apiResponse = await Http.GetStringAsync("https://localhost:7142/api/test");
+        }
+        catch (Exception ex)
+        {
+            apiResponse = $"Error: {ex.Message}";
+        }
+    }
+
+    // Submit the vote to the API
+    private async Task SubmitVote()
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(selectedVote))
+            {
+                var response = await Http.PostAsJsonAsync("https://localhost:7142/api/voting/vote", selectedVote);
+                voteResponse = await response.Content.ReadAsStringAsync();
+            }
+            else
+            {
+                voteResponse = "Please select a vote option.";
+            }
+        }
+        catch (Exception ex)
+        {
+            voteResponse = $"Error: {ex.Message}";
+        }
+    }
+
+    [Inject]
+    private HttpClient Http { get; set; }
+}
